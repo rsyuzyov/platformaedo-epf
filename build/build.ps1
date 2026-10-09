@@ -1,7 +1,7 @@
 ﻿# Сборка внешней обработки «Платформа ЭДО» (.epf) из XML-исходников src\.
 # Собирать ТОЙ ЖЕ платформой, которой сделаны исходники (8.3.21, формат 2.14): собранный файл
 # открывается на этой версии и новее. Новее собрать можно, но тогда у пользователей со старой
-# платформой файл не откроется. Нужна только платформа, рабочая база не нужна.
+# платформой файл не откроется. Нужна только платформа: база поднимается на заглушке build\stub-config.
 [CmdletBinding()]
 param(
     [string] $Designer = 'C:\Program Files\1cv8\8.3.21.1895\bin\1cv8.exe',
@@ -13,6 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # В сеансе без консоли (ssh, задача планировщика) прогресс-бар роняет вызов с Win32 0x5.
 $ProgressPreference = 'SilentlyContinue'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Src) { $Src = Join-Path $root 'src' }
@@ -33,14 +34,10 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ('pedo-epf-build-' + [Guid]::NewGui
 New-Item -ItemType Directory -Force $work | Out-Null
 try {
     $log = Join-Path $work 'designer.log'
-    $ib = Join-Path $work 'ib'
-    # Конфигуратор из ssh: только Start-Process -Wait -PassThru, вызов через & не ждет GUI-приложение.
-    $create = Start-Process $Designer -ArgumentList "CREATEINFOBASE File=""$ib"" /Out ""$log""" -Wait -PassThru
-    if ($create.ExitCode -ne 0) { throw "создание файловой ИБ: код $($create.ExitCode)`n$(Get-Content -Raw $log -Encoding Default)" }
+    $ib = New-StubInfobase $Designer $work
     if (Test-Path $Out) { Remove-Item -Force $Out }
-    $load = Start-Process $Designer -ArgumentList "DESIGNER /F ""$ib"" /DisableStartupDialogs /LoadExternalDataProcessorOrReportFromFiles ""$rootXml"" ""$Out"" /Out ""$log""" -Wait -PassThru
-    $logText = Get-Content -Raw $log -Encoding Default
-    if ($load.ExitCode -ne 0 -or -not (Test-Path $Out)) { throw "сборка epf: код $($load.ExitCode)`n$logText" }
+    Invoke-Designer $Designer "DESIGNER /F ""$ib"" /DisableStartupDialogs /LoadExternalDataProcessorOrReportFromFiles ""$rootXml"" ""$Out""" $log 'сборка epf'
+    if (-not (Test-Path $Out)) { throw "сборка epf: файл не создан`n$(Get-Content -Raw $log -Encoding Default)" }
 }
 finally {
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
