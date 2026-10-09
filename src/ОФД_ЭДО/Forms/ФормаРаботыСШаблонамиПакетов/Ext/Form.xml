@@ -208,11 +208,7 @@
 				</v8:item>
 			</Title>
 			<Type>
-				<v8:Type>xs:string</v8:Type>
-				<v8:StringQualifiers>
-					<v8:Length>0</v8:Length>
-					<v8:AllowedLength>Variable</v8:AllowedLength>
-				</v8:StringQualifiers>
+				<v8:Type>cfg:CatalogRef.Организации</v8:Type>
 			</Type>
 		</Attribute>
 		<Attribute name="Контрагент" id="3">
@@ -223,11 +219,7 @@
 				</v8:item>
 			</Title>
 			<Type>
-				<v8:Type>xs:string</v8:Type>
-				<v8:StringQualifiers>
-					<v8:Length>0</v8:Length>
-					<v8:AllowedLength>Variable</v8:AllowedLength>
-				</v8:StringQualifiers>
+				<v8:Type>cfg:CatalogRef.Контрагенты</v8:Type>
 			</Type>
 		</Attribute>
 		<Attribute name="СписокШаблонов" id="5">
@@ -249,11 +241,7 @@
 						</v8:item>
 					</Title>
 					<Type>
-						<v8:Type>xs:string</v8:Type>
-						<v8:StringQualifiers>
-							<v8:Length>0</v8:Length>
-							<v8:AllowedLength>Variable</v8:AllowedLength>
-						</v8:StringQualifiers>
+						<v8:Type>cfg:CatalogRef.Контрагенты</v8:Type>
 					</Type>
 				</Column>
 				<Column name="ИНН" id="3">
@@ -378,11 +366,7 @@
 	<Parameters>
 		<Parameter name="Организация">
 			<Type>
-				<v8:Type>xs:string</v8:Type>
-				<v8:StringQualifiers>
-					<v8:Length>0</v8:Length>
-					<v8:AllowedLength>Variable</v8:AllowedLength>
-				</v8:StringQualifiers>
+				<v8:Type>cfg:CatalogRef.Организации</v8:Type>
 			</Type>
 		</Parameter>
 	</Parameters>
