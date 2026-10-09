@@ -24,7 +24,10 @@ import xml.etree.ElementTree as ET
 DUMP_FORMAT = "2.14"
 
 OBJECT_MODULE = os.path.join("ОФД_ЭДО", "Ext", "ObjectModule.bsl")
-VERSION_PATTERN = re.compile(r'РегистрационныеДанные\.Вставить\("Версия",\s*"([^"]*)"\)')
+# В «Версии» карточки БСП (Строка 10) - версия вендора; наша сборка - в «Информации»: «... Сборка 1.0.5.3.8.6 (...)».
+VENDOR_VERSION_PATTERN = re.compile(r'РегистрационныеДанные\.Вставить\("Версия",\s*"([^"]*)"\)')
+BUILD_VERSION_PATTERN = re.compile(r'РегистрационныеДанные\.Вставить\("Информация",\s*"[^"]*Сборка (\d+(?:\.\d+)+)[^"]*"\)')
+VERSION_FIELD_LENGTH = 10
 
 HYGIENE_PATTERNS = [
     ("имя внутреннего домена", re.compile(r"\b[a-z0-9-]+\.(?:local|lan|corp)\b", re.IGNORECASE)),
@@ -80,19 +83,23 @@ def version_tuple(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
-def read_version(report: Report | None = None) -> str | None:
-    """Версия из СведенияОВнешнейОбработке() модуля объекта."""
+def read_registration(pattern: re.Pattern, report: Report | None, title: str) -> str | None:
     path = os.path.join(src_dir(), OBJECT_MODULE)
     try:
         with open(path, "r", encoding="utf-8-sig") as module_file:
-            match = VERSION_PATTERN.search(module_file.read())
+            match = pattern.search(module_file.read())
     except OSError:
         match = None
     if match is None:
         if report:
-            report.fail("в %s не найдено РегистрационныеДанные.Вставить(\"Версия\", ...)" % rel(path))
+            report.fail("в %s не найдено: %s" % (rel(path), title))
         return None
     return match.group(1)
+
+
+def read_version(report: Report | None = None) -> str | None:
+    """Наша сборка из «Информации» СведенияОВнешнейОбработке()."""
+    return read_registration(BUILD_VERSION_PATTERN, report, "«Сборка N.N.N.N.N.N» в РегистрационныеДанные «Информация»")
 
 
 def vendor_base() -> str | None:
@@ -107,7 +114,14 @@ def check_version(report: Report) -> str | None:
     """Наша версия = версия вендора + номер нашей сборки: 1.0.5.3.8.1, 1.0.5.3.8.2 и т. д."""
     report.stage("версия обработки")
     version = read_version(report)
-    if version is None:
+    vendor_version = read_registration(VENDOR_VERSION_PATTERN, report, "РегистрационныеДанные «Версия»")
+    if version is None or vendor_version is None:
+        return None
+    if len(vendor_version) > VERSION_FIELD_LENGTH:
+        report.fail("«Версия» %r длиннее %d символов — БСП обрежет её в карточке" % (vendor_version, VERSION_FIELD_LENGTH))
+        return None
+    if version.rsplit(".", 1)[0] != vendor_version:
+        report.fail("«Версия» %s не совпадает с базой сборки %s" % (vendor_version, version))
         return None
     if not re.fullmatch(r"\d+(?:\.\d+){5}", version):
         report.fail("версия %r не в формате <версия вендора N.N.N.N.N>.<номер сборки>" % version)
@@ -228,7 +242,7 @@ def check_version_bumped(report: Report, version: str | None) -> None:
     elif code != 1:
         report.ok("сравнение с %s недоступно (нет полной истории) — пропущено" % tag)
     elif version_tuple(version) <= version_tuple(tag[1:]):
-        report.fail("src изменён после %s, а версия осталась %s — поднять номер сборки в СведенияОВнешнейОбработке"
+        report.fail("src изменён после %s, а сборка осталась %s — поднять «Сборка» в СведенияОВнешнейОбработке"
                     % (tag, version))
     else:
         report.ok("%s > %s, src изменён — версия поднята" % (version, tag))
