@@ -16,6 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # В сеансе без консоли (ssh, задача планировщика) прогресс-бар роняет вызов с Win32 0x5.
 $ProgressPreference = 'SilentlyContinue'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 $root = (Resolve-Path $Root).Path
 $branch = (& git -C $root rev-parse --abbrev-ref HEAD).Trim()
@@ -35,21 +36,16 @@ try {
     }
     $epfHash = (Get-FileHash -Algorithm SHA256 $epf).Hash.ToLower()
     $log = Join-Path $work 'designer.log'
-    $ib = Join-Path $work 'ib'
+    $ib = New-StubInfobase $Designer $work
     $dump = Join-Path $work 'dump'
-    $create = Start-Process $Designer -ArgumentList "CREATEINFOBASE File=""$ib"" /Out ""$log""" -Wait -PassThru
-    if ($create.ExitCode -ne 0) { throw "создание файловой ИБ: код $($create.ExitCode)" }
-    $unload = Start-Process $Designer -ArgumentList "DESIGNER /F ""$ib"" /DisableStartupDialogs /DumpExternalDataProcessorOrReportToFiles ""$dump\ОФД_ЭДО.xml"" ""$epf"" -Format Hierarchical /Out ""$log""" -Wait -PassThru
-    if ($unload.ExitCode -ne 0 -or -not (Test-Path "$dump\ОФД_ЭДО.xml")) { throw "выгрузка epf: код $($unload.ExitCode)`n$(Get-Content -Raw $log -Encoding Default)" }
+    Invoke-Designer $Designer "DESIGNER /F ""$ib"" /DisableStartupDialogs /DumpExternalDataProcessorOrReportToFiles ""$dump\ОФД_ЭДО.xml"" ""$epf"" -Format Hierarchical" $log 'выгрузка epf'
     # Приведение к устойчивому виду: сборка и повторная выгрузка. Платформа при сборке переставляет
     # порядок обработчиков в части форм; без этого перестановка всплывает шумом в первом же PR,
     # где форму выгрузили из конфигуратора. Второй круг дает то же самое байт в байт (проверено на 1.0.5.3.8).
     $canonicalEpf = Join-Path $work 'canonical.epf'
-    $build = Start-Process $Designer -ArgumentList "DESIGNER /F ""$ib"" /DisableStartupDialogs /LoadExternalDataProcessorOrReportFromFiles ""$dump\ОФД_ЭДО.xml"" ""$canonicalEpf"" /Out ""$log""" -Wait -PassThru
-    if ($build.ExitCode -ne 0 -or -not (Test-Path $canonicalEpf)) { throw "сборка для приведения: код $($build.ExitCode)`n$(Get-Content -Raw $log -Encoding Default)" }
+    Invoke-Designer $Designer "DESIGNER /F ""$ib"" /DisableStartupDialogs /LoadExternalDataProcessorOrReportFromFiles ""$dump\ОФД_ЭДО.xml"" ""$canonicalEpf""" $log 'сборка для приведения'
     $dump = Join-Path $work 'canonical'
-    $unload = Start-Process $Designer -ArgumentList "DESIGNER /F ""$ib"" /DisableStartupDialogs /DumpExternalDataProcessorOrReportToFiles ""$dump\ОФД_ЭДО.xml"" ""$canonicalEpf"" -Format Hierarchical /Out ""$log""" -Wait -PassThru
-    if ($unload.ExitCode -ne 0 -or -not (Test-Path "$dump\ОФД_ЭДО.xml")) { throw "повторная выгрузка: код $($unload.ExitCode)" }
+    Invoke-Designer $Designer "DESIGNER /F ""$ib"" /DisableStartupDialogs /DumpExternalDataProcessorOrReportToFiles ""$dump\ОФД_ЭДО.xml"" ""$canonicalEpf"" -Format Hierarchical" $log 'повторная выгрузка'
     $format = [regex]::Match((Get-Content -TotalCount 3 -Encoding UTF8 "$dump\ОФД_ЭДО.xml") -join ' ', 'MetaDataObject[^>]*\sversion="([0-9.]+)"').Groups[1].Value
     if ($format -ne $ExpectedFormat) { throw "выгрузка в формате $format, ожидается $ExpectedFormat - не та платформа?" }
 

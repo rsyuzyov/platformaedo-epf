@@ -3,7 +3,7 @@
 
 Собрать .epf без конфигуратора нельзя, поэтому в CI проверяется то, что читается из самих XML и BSL:
 формат выгрузки, версия обработки и её связь с версией вендора, разбираемость XML, BOM текстовых
-макетов и отсутствие в публичном дереве следов конкретной базы.
+макетов, отсутствие в публичном дереве следов конкретной базы и сохранность ссылочных типов конфигурации.
 
 Запуск:
     python build/checks.py            # все проверки
@@ -216,6 +216,63 @@ def check_hygiene(report: Report) -> None:
         report.ok("следов конкретной базы не найдено")
 
 
+CONFIG_TYPE_PATTERN = re.compile(r"cfg:([A-Za-z]+Ref)\.([^<\"\s]+)")
+STUB_FOLDERS = {"CatalogRef": "Catalogs", "DocumentRef": "Documents", "EnumRef": "Enums",
+                "ChartOfCharacteristicTypesRef": "ChartsOfCharacteristicTypes"}
+
+
+def config_types_in_texts(texts) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for text in texts:
+        for kind, name in CONFIG_TYPE_PATTERN.findall(text):
+            key = "%s.%s" % (kind, name)
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def config_types_in_src() -> dict[str, int]:
+    texts = []
+    for path in iter_files(src_dir()):
+        if path.endswith(".xml"):
+            with open(path, "r", encoding="utf-8-sig", errors="replace") as source_file:
+                texts.append(source_file.read())
+    return config_types_in_texts(texts)
+
+
+def check_stub_covers_types(report: Report, types_in_src: dict[str, int]) -> None:
+    """Тип конфигурации, которого нет в заглушке, при выгрузке и сборке молча превращается в строку."""
+    report.stage("заглушка конфигурации покрывает типы исходников")
+    stub_dir = os.path.join(repo_root(), "build", "stub-config")
+    missing = []
+    for key in sorted(types_in_src):
+        kind, name = key.split(".", 1)
+        folder = STUB_FOLDERS.get(kind)
+        if folder is None or not os.path.exists(os.path.join(stub_dir, folder, name + ".xml")):
+            missing.append(key)
+    if missing:
+        report.fail("нет в build/stub-config: %s — добавить объекты в заглушку" % ", ".join(missing))
+    else:
+        report.ok("все %d типов есть в заглушке" % len(types_in_src))
+
+
+def check_types_not_lost(report: Report, types_in_src: dict[str, int]) -> None:
+    """Ссылочных типов в src не меньше, чем у вендора: потеря типа ломает формы у пользователя."""
+    report.stage("ссылочные типы не потеряны относительно вендора")
+    base = vendor_base()
+    if base is None:
+        report.ok("теги vendor/* недоступны — сравнение пропущено")
+        return
+    code, listing = git("grep", "-h", "-o", "-E", r"cfg:[A-Za-z]+Ref\.[^<\" ]+", "vendor/" + base, "--", "src")
+    vendor_types = config_types_in_texts(listing.splitlines()) if code == 0 else {}
+    lost = ["%s (%d → %d)" % (key, count, types_in_src.get(key, 0))
+            for key, count in sorted(vendor_types.items()) if types_in_src.get(key, 0) < count]
+    if lost:
+        report.fail("меньше, чем у вендора %s: %s" % (base, ", ".join(lost)))
+    else:
+        report.ok("%d ссылок на %d типов, у вендора %s — %d" % (sum(types_in_src.values()), len(types_in_src),
+                                                              base, sum(vendor_types.values())))
+
+
 def last_release_tag() -> str | None:
     code, output = git("tag", "--list", "v*", "--sort=-v:refname")
     if code != 0:
@@ -269,6 +326,9 @@ def main() -> int:
     check_text_template_bom(report)
     check_xml_parses(report)
     check_hygiene(report)
+    types_in_src = config_types_in_src()
+    check_stub_covers_types(report, types_in_src)
+    check_types_not_lost(report, types_in_src)
     check_version_bumped(report, version)
     print()
     print("проверки НЕ пройдены" if report.failed else "проверки пройдены")
