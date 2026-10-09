@@ -18,7 +18,7 @@ $root = Split-Path -Parent $PSScriptRoot
 if (-not $Src) { $Src = Join-Path $root 'src' }
 $rootXml = Join-Path $Src 'ОФД_ЭДО.xml'
 $objectModule = Join-Path $Src 'ОФД_ЭДО\Ext\ObjectModule.bsl'
-$version = [regex]::Match((Get-Content -Raw -Encoding UTF8 $objectModule), 'РегистрационныеДанные\.Вставить\("Версия",\s*"([^"]*)"\)').Groups[1].Value
+$version = [regex]::Match((Get-Content -Raw -Encoding UTF8 $objectModule), 'РегистрационныеДанные\.Вставить\("Информация",\s*"[^"]*Сборка (\d+(?:\.\d+)+)').Groups[1].Value
 if (-not $version) { throw "не прочитана версия из $objectModule" }
 if (-not $Out) { $Out = Join-Path $root "dist\Платформа_ЭДО_$version.epf" }
 if (-not (Test-Path $Designer)) { throw "не найден конфигуратор: $Designer" }
