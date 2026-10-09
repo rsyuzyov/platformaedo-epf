@@ -6,7 +6,7 @@
 param(
     [string] $Designer = 'C:\Program Files\1cv8\8.3.21.1895\bin\1cv8.exe',
     [string] $Src,                       # каталог исходников (по умолчанию ..\src)
-    [string] $Out,                       # куда положить .epf (по умолчанию ..\build\ОФД_ЭДО.epf)
+    [string] $Out,                       # куда положить .epf (по умолчанию ..\dist\Платформа_ЭДО_<версия>.epf)
     [string] $ExpectedFormat = '2.14',
     [int]    $MinSizeKb = 300            # порог «сборка не пустая»
 )
@@ -16,8 +16,11 @@ $ProgressPreference = 'SilentlyContinue'
 
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Src) { $Src = Join-Path $root 'src' }
-if (-not $Out) { $Out = Join-Path $root 'build\ОФД_ЭДО.epf' }
 $rootXml = Join-Path $Src 'ОФД_ЭДО.xml'
+$objectModule = Join-Path $Src 'ОФД_ЭДО\Ext\ObjectModule.bsl'
+$version = [regex]::Match((Get-Content -Raw -Encoding UTF8 $objectModule), 'РегистрационныеДанные\.Вставить\("Версия",\s*"([^"]*)"\)').Groups[1].Value
+if (-not $version) { throw "не прочитана версия из $objectModule" }
+if (-not $Out) { $Out = Join-Path $root "dist\Платформа_ЭДО_$version.epf" }
 if (-not (Test-Path $Designer)) { throw "не найден конфигуратор: $Designer" }
 if (-not (Test-Path $rootXml)) { throw "не найден корневой файл исходников: $rootXml" }
 
@@ -46,4 +49,4 @@ finally {
 $size = (Get-Item $Out).Length
 if ($size -lt ($MinSizeKb * 1KB)) { throw ("собран подозрительно маленький epf: {0} Б" -f $size) }
 $hash = (Get-FileHash -Algorithm SHA256 $Out).Hash.ToLower()
-Write-Host ("готово: {0} ({1:N0} Б), sha256 {2}" -f $Out, $size, $hash)
+Write-Host ("готово: {0}, версия {1}, {2:N0} Б, sha256 {3}" -f $Out, $version, $size, $hash)
