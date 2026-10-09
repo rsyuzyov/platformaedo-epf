@@ -1,7 +1,7 @@
 ﻿# Импорт новой версии обработки вендора в ветку vendor: архив (.rar) или .epf -> XML платформой 8.3.21.
 # Порядок: рядом с рабочей копией main сделать вторую на ветке vendor-import/<версия> от vendor
 # (git worktree add ..\pedo-vendor -b vendor-import/<версия> origin/vendor) и запустить скрипт из main:
-# .\tools\vendor-import.ps1 -Root ..\pedo-vendor -Source <файл> -Version <версия>;
+# .\build\vendor-import.ps1 -Root ..\pedo-vendor -Source <файл> -Version <версия>;
 # коммит, PR в vendor; после слияния - тег vendor/<версия> и PR vendor -> main.
 # Скрипт трогает только src\ (целиком заменяет его выгрузкой вендора) - наши файлы в ветку vendor не попадают.
 [CmdletBinding()]

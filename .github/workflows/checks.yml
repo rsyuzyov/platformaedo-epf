@@ -1,0 +1,21 @@
+# Собрать .epf в облачном раннере нельзя — нужна платформа 1С. Здесь проверяется то, что читается из исходников.
+name: checks
+
+on:
+  push:
+    branches: [main, vendor]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Версия сверяется с тегами vendor/* и v*, им нужна полная история.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: build/checks.py
+        run: python3 build/checks.py
