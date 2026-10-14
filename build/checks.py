@@ -216,6 +216,38 @@ def check_hygiene(report: Report) -> None:
         report.ok("следов конкретной базы не найдено")
 
 
+# Свойства глобального контекста (системные перечисления, менеджеры): присваивание такому имени сборка
+# пропускает, а при выполнении - «Поле объекта недоступно для записи». Прецедент 14.10.2026: «ЧастиДаты».
+GLOBAL_CONTEXT_NAMES = (
+    "ЧастиДаты", "ДопустимаяДлина", "ДопустимыйЗнак", "Символы", "Метаданные", "Справочники", "Документы",
+    "Перечисления", "Константы", "РегистрыСведений", "РегистрыНакопления", "РегистрыБухгалтерии", "Обработки",
+    "Отчеты", "ПланыВидовХарактеристик", "ПланыСчетов", "ПланыОбмена", "БизнесПроцессы", "Задачи",
+    "ПараметрыСеанса", "ХранилищеОбщихНастроек", "ХранилищеСистемныхНастроек", "ПользователиИнформационнойБазы",
+    "РегламентныеЗадания", "ФоновыеЗадания", "ВнешниеОбработки", "ВнешниеОтчеты", "РежимДиалогаВопрос",
+    "КодВозвратаДиалога", "КодировкаТекста", "ВидСравнения", "НаправлениеСортировки", "ТипЗначенияJSON",
+    "ТипХранилищаСертификатовКриптографии", "РежимЗаписиДокумента", "РежимПроведенияДокумента", "WebЦвета",
+    "ЦветаСтиля", "ШрифтыСтиля", "ГоризонтальноеПоложение", "ВертикальноеПоложение", "ВидДвиженияНакопления",
+    "ВидДвиженияБухгалтерии", "ИспользованиеByteOrderMark", "СтатусСообщения", "ХешФункция", "ДействиеПриНажатииОпросаКнопки",
+)
+GLOBAL_CONTEXT_ASSIGNMENT = re.compile(r"^\s*(%s)\s*=(?!=)" % "|".join(GLOBAL_CONTEXT_NAMES))
+
+
+def check_no_global_context_assignment(report: Report) -> None:
+    report.stage("нет присваивания свойствам глобального контекста")
+    hits = 0
+    for path in iter_files(src_dir()):
+        if not path.lower().endswith(".bsl"):
+            continue
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as source_file:
+            for line_number, line in enumerate(source_file, 1):
+                match = GLOBAL_CONTEXT_ASSIGNMENT.match(line)
+                if match:
+                    hits += 1
+                    report.fail("%s:%d — присваивание «%s»: имя занято глобальным контекстом" % (rel(path), line_number, match.group(1)))
+    if not hits:
+        report.ok("присваиваний именам глобального контекста нет")
+
+
 CONFIG_TYPE_PATTERN = re.compile(r"cfg:([A-Za-z]+Ref)\.([^<\"\s]+)")
 STUB_FOLDERS = {"CatalogRef": "Catalogs", "DocumentRef": "Documents", "EnumRef": "Enums",
                 "ChartOfCharacteristicTypesRef": "ChartsOfCharacteristicTypes"}
@@ -326,6 +358,7 @@ def main() -> int:
     check_text_template_bom(report)
     check_xml_parses(report)
     check_hygiene(report)
+    check_no_global_context_assignment(report)
     types_in_src = config_types_in_src()
     check_stub_covers_types(report, types_in_src)
     check_types_not_lost(report, types_in_src)
